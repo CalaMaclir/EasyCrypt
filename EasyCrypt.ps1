@@ -1,5 +1,5 @@
 ﻿############################################################################
-# EasyCrypt.ps1 by Cala Maclir
+# EasyCrypt.ps1
 ############################################################################
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -15,7 +15,79 @@ if (-not (Test-Path $keysFolder)) {
 }
 
 #-----------------------------------------------------------------------
-# (A) ファイル上書き可否をユーザに確認する関数
+# タイムアウト付きメッセージボックスを表示する関数
+#   - Yes/Noボタンを用意し、タイムアウト経過で自動クローズ
+#   - 戻り値: [System.Windows.Forms.DialogResult] (Yes / No / None)
+#-----------------------------------------------------------------------
+function Show-MessageBoxWithTimeout {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Message,
+        [Parameter(Mandatory)]
+        [string]$Title,
+        [int]$TimeoutSeconds = 10
+    )
+
+    # フォーム作成
+    $form = New-Object System.Windows.Forms.Form
+    $form.Text = $Title
+    $form.Width = 400
+    $form.Height = 150
+    $form.StartPosition = "CenterScreen"
+
+    $label = New-Object System.Windows.Forms.Label
+    $label.Text = $Message
+    $label.AutoSize = $true
+    $label.Left = 20
+    $label.Top = 20
+    # 幅を調整して折り返す場合は下記を追加調整
+    # $label.MaximumSize = New-Object System.Drawing.Size(360, 0)
+    # $label.AutoSize = $true
+    $form.Controls.Add($label)
+
+    # Yesボタン
+    $yesButton = New-Object System.Windows.Forms.Button
+    $yesButton.Text = "Yes"
+    $yesButton.Left = 50
+    $yesButton.Top = 70
+    $yesButton.Add_Click({
+        $form.Tag = [System.Windows.Forms.DialogResult]::Yes
+        $form.Close()
+    })
+    $form.Controls.Add($yesButton)
+
+    # Noボタン
+    $noButton = New-Object System.Windows.Forms.Button
+    $noButton.Text = "No"
+    $noButton.Left = 150
+    $noButton.Top = 70
+    $noButton.Add_Click({
+        $form.Tag = [System.Windows.Forms.DialogResult]::No
+        $form.Close()
+    })
+    $form.Controls.Add($noButton)
+
+    # タイマー
+    $timer = New-Object System.Windows.Forms.Timer
+    $timer.Interval = 1000
+    $count = 0
+    $timer.Add_Tick({
+        $count++
+        if($count -ge $TimeoutSeconds) {
+            $form.Tag = [System.Windows.Forms.DialogResult]::None
+            $form.Close()
+        }
+    })
+    $timer.Start()
+
+    $null = $form.ShowDialog()
+    $timer.Stop()
+
+    return $form.Tag
+}
+
+#-----------------------------------------------------------------------
+# (A) ファイル上書き可否をユーザに確認する関数 (タイムアウト版)
 #-----------------------------------------------------------------------
 function Confirm-Overwrite {
     param(
@@ -29,10 +101,10 @@ function Confirm-Overwrite {
 
     $msg   = "既にファイルが存在します。上書きしますか？`nYes = 上書き, No = スキップ"
     $title = "上書き確認"
-    $btn   = [System.Windows.Forms.MessageBoxButtons]::YesNo
-    $icon  = [System.Windows.Forms.MessageBoxIcon]::Question
+    $timeoutSeconds = 10  # タイムアウト(秒)を必要に応じて調整
 
-    $res = [System.Windows.Forms.MessageBox]::Show($msg, $title, $btn, $icon)
+    $res = Show-MessageBoxWithTimeout -Message $msg -Title $title -TimeoutSeconds $timeoutSeconds
+
     if ($res -eq [System.Windows.Forms.DialogResult]::Yes) {
         Write-Host "上書きを承諾 => $TargetFilePath"
         return $true
@@ -170,7 +242,10 @@ function EncryptFileMulti {
     $aes.GenerateKey()
     $aes.GenerateIV()
 
-    # 公開鍵ごとに RSA暗号
+    # --- 生成したAESキーをSecureStringに保持 ---
+    $Global:secureAesKey = ConvertTo-SecureString ([Convert]::ToBase64String($aes.Key)) -AsPlainText -Force
+
+    # 公開鍵ごとに RSA暗号 (OAEP)
     $rsaEntries = @()
     foreach ($pub in $PublicKeyPaths) {
         if (-not (Test-Path $pub)) {
@@ -188,7 +263,8 @@ function EncryptFileMulti {
             continue
         }
 
-        $encKey = $rsa.Encrypt($aes.Key, $false)
+        # ★RSA-OAEPに変更 (true)
+        $encKey = $rsa.Encrypt($aes.Key, $true)
         $rsaEntries += [PSCustomObject]@{
             Modulus = $modulusBase64
             EncKey  = $encKey
@@ -351,15 +427,16 @@ function DecryptFileMultiAuto {
                 $rsa.Dispose()
                 continue
             }
-            Write-Host "→ 試行: $($pvtItem.Name) / Modulus=$modPvt"
+            Write-Host "→ 試行: $($pvtItem.Name)"
 
             $hit = $false
             foreach ($ent in $entries) {
                 if ($ent.Modulus -eq $modPvt) {
                     try {
-                        $tmpKey = $rsa.Decrypt($ent.EncKey, $false)
+                        # ★RSA-OAEPに変更 (true)
+                        $tmpKey = $rsa.Decrypt($ent.EncKey, $true)
                         if ($tmpKey) {
-                            Write-Host "   成功: $($pvtItem.Name) でAES鍵復号!"
+                            Write-Host "   成功: $($pvtItem.Name)"
                             $aesKey = $tmpKey
                             $hit    = $true
                             break
@@ -381,6 +458,9 @@ function DecryptFileMultiAuto {
             Write-Host "エラー: keys内のいずれの秘密鍵でも復号できませんでした"
             return
         }
+
+        # 復号に成功したAESキーをSecureStringに保持
+        $Global:secureAesKey = ConvertTo-SecureString ([Convert]::ToBase64String($aesKey)) -AsPlainText -Force
 
         #=== AES復号ストリーム ===
         $aes = [System.Security.Cryptography.Aes]::Create()
@@ -512,7 +592,7 @@ $dropLabel.Add_DragDrop({
 
 # 公開鍵チェックリスト
 $ckLabel = New-Object System.Windows.Forms.Label
-$ckLabel.Text = "複数公開鍵をチェック:"
+$ckLabel.Text = "使用する公開鍵をチェック"
 $ckLabel.Location = New-Object System.Drawing.Point(10,280)
 $ckLabel.Size = New-Object System.Drawing.Size(180,20)
 $form.Controls.Add($ckLabel)
@@ -539,7 +619,7 @@ $genBtn.Size = New-Object System.Drawing.Size(80,30)
 $genBtn.Add_Click({
     $newId = Generate-KeyPair
     if ($newId) {
-        [System.Windows.Forms.MessageBox]::Show("新しい鍵を生成＆検証しました: $newId")
+        [System.Windows.Forms.MessageBox]::Show("新しい鍵を生成しました: $newId")
         RefreshKeyList
     }
     else {
@@ -594,7 +674,7 @@ $form.Controls.Add($encBtn)
 
 # Decrypt ボタン (keys内の全pvtkeyを自動試行)
 $decBtn = New-Object System.Windows.Forms.Button
-$decBtn.Text = "Decrypt"
+$decBtn.Text = "復号"
 $decBtn.Location = New-Object System.Drawing.Point(120,430)
 $decBtn.Size = New-Object System.Drawing.Size(100,30)
 $decBtn.Add_Click({
