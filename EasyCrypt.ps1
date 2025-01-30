@@ -8,14 +8,14 @@ Add-Type -AssemblyName System.IO
 
 $rsabit = 4096
 
-#=== 1) ƒOƒ[ƒoƒ‹İ’è: keysƒtƒHƒ‹ƒ_ (ƒJƒŒƒ“ƒg’¼‰º) =====================
+#=== 1) ã‚°ãƒ­ãƒ¼ãƒãƒ«è¨­å®š: keysãƒ•ã‚©ãƒ«ãƒ€ (ã‚«ãƒ¬ãƒ³ãƒˆç›´ä¸‹) =====================
 $keysFolder = Join-Path (Get-Location) "keys"
 if (-not (Test-Path $keysFolder)) {
     New-Item -ItemType Directory -Path $keysFolder | Out-Null
 }
 
 #-----------------------------------------------------------------------
-# (A) ƒtƒ@ƒCƒ‹ã‘‚«‰Â”Û‚ğƒ†[ƒU‚ÉŠm”F‚·‚éŠÖ”
+# (A) ãƒ•ã‚¡ã‚¤ãƒ«ä¸Šæ›¸ãå¯å¦ã‚’ãƒ¦ãƒ¼ã‚¶ã«ç¢ºèªã™ã‚‹é–¢æ•°
 #-----------------------------------------------------------------------
 function Confirm-Overwrite {
     param(
@@ -27,24 +27,24 @@ function Confirm-Overwrite {
         return $true
     }
 
-    $msg   = "Šù‚Éƒtƒ@ƒCƒ‹‚ª‘¶İ‚µ‚Ü‚·Bã‘‚«‚µ‚Ü‚·‚©H`nYes = ã‘‚«, No = ƒXƒLƒbƒv"
-    $title = "ã‘‚«Šm”F"
+    $msg   = "æ—¢ã«ãƒ•ã‚¡ã‚¤ãƒ«ãŒå­˜åœ¨ã—ã¾ã™ã€‚ä¸Šæ›¸ãã—ã¾ã™ã‹ï¼Ÿ`nYes = ä¸Šæ›¸ã, No = ã‚¹ã‚­ãƒƒãƒ—"
+    $title = "ä¸Šæ›¸ãç¢ºèª"
     $btn   = [System.Windows.Forms.MessageBoxButtons]::YesNo
     $icon  = [System.Windows.Forms.MessageBoxIcon]::Question
 
     $res = [System.Windows.Forms.MessageBox]::Show($msg, $title, $btn, $icon)
     if ($res -eq [System.Windows.Forms.DialogResult]::Yes) {
-        Write-Host "ã‘‚«‚ğ³‘ø => $TargetFilePath"
+        Write-Host "ä¸Šæ›¸ãã‚’æ‰¿è«¾ => $TargetFilePath"
         return $true
     }
     else {
-        Write-Host "ƒXƒLƒbƒv => $TargetFilePath"
+        Write-Host "ã‚¹ã‚­ãƒƒãƒ— => $TargetFilePath"
         return $false
     }
 }
 
 #-----------------------------------------------------------------------
-# (B) ŒöŠJŒ®/”é–§Œ®XMLƒyƒA‚ª³‚µ‚­‘Î‰‚µ‚Ä‚¢‚é‚©‚ğŒŸØ
+# (B) å…¬é–‹éµ/ç§˜å¯†éµXMLãƒšã‚¢ãŒæ­£ã—ãå¯¾å¿œã—ã¦ã„ã‚‹ã‹ã‚’æ¤œè¨¼
 #-----------------------------------------------------------------------
 function Test-RSAKeyPair {
     [CmdletBinding()]
@@ -56,24 +56,24 @@ function Test-RSAKeyPair {
     )
 
     try {
-        # --- ”é–§Œ®‚ğ“Ç‚İ‚ŞRSAƒIƒuƒWƒFƒNƒg ---
+        # --- ç§˜å¯†éµã‚’èª­ã¿è¾¼ã‚€RSAã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ ---
         $rsaPri = New-Object System.Security.Cryptography.RSACryptoServiceProvider
         $rsaPri.FromXmlString($PrivateKeyXml)
 
-        # --- ŒöŠJŒ®‚ğ“Ç‚İ‚ŞRSAƒIƒuƒWƒFƒNƒg ---
+        # --- å…¬é–‹éµã‚’èª­ã¿è¾¼ã‚€RSAã‚ªãƒ–ã‚¸ã‚§ã‚¯ãƒˆ ---
         $rsaPub = New-Object System.Security.Cryptography.RSACryptoServiceProvider
         $rsaPub.FromXmlString($PublicKeyXml)
 
-        # --- ƒeƒXƒg—pƒf[ƒ^ (–¼¨ŒŸØ) ---
-        $testData = [System.Text.Encoding]::UTF8.GetBytes("KeyPairŒŸØ—p‚ÌƒTƒ“ƒvƒ‹ƒf[ƒ^")
+        # --- ãƒ†ã‚¹ãƒˆç”¨ãƒ‡ãƒ¼ã‚¿ (ç½²åâ†’æ¤œè¨¼) ---
+        $testData = [System.Text.Encoding]::UTF8.GetBytes("KeyPairæ¤œè¨¼ç”¨ã®ã‚µãƒ³ãƒ—ãƒ«ãƒ‡ãƒ¼ã‚¿")
 
-        # --- ”é–§Œ®‚Å–¼ ---
+        # --- ç§˜å¯†éµã§ç½²å ---
         $signature = $rsaPri.SignData(
             $testData,
             [System.Security.Cryptography.SHA256CryptoServiceProvider]::new()
         )
 
-        # --- ŒöŠJŒ®‚ÅŒŸØ ---
+        # --- å…¬é–‹éµã§æ¤œè¨¼ ---
         $isValid = $rsaPub.VerifyData(
             $testData,
             [System.Security.Cryptography.SHA256CryptoServiceProvider]::new(),
@@ -82,44 +82,44 @@ function Test-RSAKeyPair {
         return $isValid
     }
     catch {
-        Write-Host "Œ®ƒyƒA‚ÌŒŸØ’†‚ÉƒGƒ‰[‚ª”­¶‚µ‚Ü‚µ‚½: $($_.Exception.Message)"
+        Write-Host "éµãƒšã‚¢ã®æ¤œè¨¼ä¸­ã«ã‚¨ãƒ©ãƒ¼ãŒç™ºç”Ÿã—ã¾ã—ãŸ: $($_.Exception.Message)"
         return $false
     }
 }
 
 #-----------------------------------------------------------------------
-# (C) Œ®ƒyƒA¶¬
-#    => ¶¬’¼Œã‚É Test-RSAKeyPair ‚ÅŒŸØ
+# (C) éµãƒšã‚¢ç”Ÿæˆ
+#    => ç”Ÿæˆç›´å¾Œã« Test-RSAKeyPair ã§æ¤œè¨¼
 #-----------------------------------------------------------------------
 function Generate-KeyPair {
     $id = (Get-Date).ToString("yyyyMMddHHmmss")
 
-    # 4096bit ‚Ì RSAŒ®‚ğì¬
+    # 4096bit ã® RSAéµã‚’ä½œæˆ
     $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider($rsabit)
     $privateXml = $rsa.ToXmlString($true)
     $publicXml  = $rsa.ToXmlString($false)
     $rsa.Dispose()
 
-    # ‚Ü‚¸ŒŸØ
+    # ã¾ãšæ¤œè¨¼
     $testOK = Test-RSAKeyPair -PrivateKeyXml $privateXml -PublicKeyXml $publicXml
     if (-not $testOK) {
-        Write-Host "ƒGƒ‰[: ì¬‚µ‚½Œ®ƒyƒA‚ª³‚µ‚­‘Î‰‚µ‚Ä‚¢‚Ü‚¹‚ñBi–¼ŒŸØ¸”sj"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: ä½œæˆã—ãŸéµãƒšã‚¢ãŒæ­£ã—ãå¯¾å¿œã—ã¦ã„ã¾ã›ã‚“ã€‚ï¼ˆç½²åæ¤œè¨¼å¤±æ•—ï¼‰"
         return $null
     }
 
-    # ŒŸØOK‚È‚çƒtƒ@ƒCƒ‹•Û‘¶
+    # æ¤œè¨¼OKãªã‚‰ãƒ•ã‚¡ã‚¤ãƒ«ä¿å­˜
     $pvtPath = Join-Path $keysFolder "$id.pvtkey"
     $pubPath = Join-Path $keysFolder "$id.pubkey"
 
     $privateXml | Out-File -FilePath $pvtPath -Encoding UTF8 -Force
     $publicXml  | Out-File -FilePath $pubPath -Encoding UTF8 -Force
 
-    Write-Host "Œ®ƒyƒA¶¬•ŒŸØOK: $pvtPath, $pubPath"
+    Write-Host "éµãƒšã‚¢ç”Ÿæˆï¼†æ¤œè¨¼OK: $pvtPath, $pubPath"
     return $id
 }
 
 #-----------------------------------------------------------------------
-# (D) ŒöŠJŒ®XML‚©‚ç Modulus ‚ğ’Šo
+# (D) å…¬é–‹éµXMLã‹ã‚‰ Modulus ã‚’æŠ½å‡º
 #-----------------------------------------------------------------------
 function Get-ModulusFromXmlString {
     param([string]$XmlString)
@@ -130,7 +130,7 @@ function Get-ModulusFromXmlString {
 }
 
 #-----------------------------------------------------------------------
-# (E) •¡”ŒöŠJŒ®‚ÅˆÃ†‰» (ƒtƒ@ƒCƒ‹æ“ª‚ÉƒGƒ“ƒgƒŠ‚ğ•À‚×‚é)
+# (E) è¤‡æ•°å…¬é–‹éµã§æš—å·åŒ– (ãƒ•ã‚¡ã‚¤ãƒ«å…ˆé ­ã«ã‚¨ãƒ³ãƒˆãƒªã‚’ä¸¦ã¹ã‚‹)
 #-----------------------------------------------------------------------
 function EncryptFileMulti {
     param(
@@ -142,26 +142,26 @@ function EncryptFileMulti {
     )
 
     if ($PublicKeyPaths.Count -eq 0) {
-        Write-Host "ƒGƒ‰[: ŒöŠJŒ®‚ª1‚Â‚àw’è‚³‚ê‚Ä‚¢‚Ü‚¹‚ñB"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: å…¬é–‹éµãŒ1ã¤ã‚‚æŒ‡å®šã•ã‚Œã¦ã„ã¾ã›ã‚“ã€‚"
         return
     }
     if (-not (Test-Path $InputFilePath)) {
-        Write-Host "ƒGƒ‰[: ˆÃ†‰»‘ÎÛƒtƒ@ƒCƒ‹‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñB -> $InputFilePath"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: æš—å·åŒ–å¯¾è±¡ãƒ•ã‚¡ã‚¤ãƒ«ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚ -> $InputFilePath"
         return
     }
 
-    # o—Íƒtƒ@ƒCƒ‹ => .enc
+    # å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ« => .enc
     $baseFileName = [System.IO.Path]::GetFileName($InputFilePath)
     $folder       = [System.IO.Path]::GetDirectoryName($InputFilePath)
     $outEncPath   = Join-Path $folder ($baseFileName + ".enc")
 
-    # ã‘‚«Šm”F
+    # ä¸Šæ›¸ãç¢ºèª
     $ok = Confirm-Overwrite $outEncPath
     if (-not $ok) {
         return
     }
 
-    # AESŒ® ì¬
+    # AESéµ ä½œæˆ
     $aes = [System.Security.Cryptography.Aes]::Create()
     $aes.KeySize = 256
     $aes.BlockSize = 128
@@ -170,11 +170,11 @@ function EncryptFileMulti {
     $aes.GenerateKey()
     $aes.GenerateIV()
 
-    # ŒöŠJŒ®‚²‚Æ‚É RSAˆÃ†
+    # å…¬é–‹éµã”ã¨ã« RSAæš—å·
     $rsaEntries = @()
     foreach ($pub in $PublicKeyPaths) {
         if (-not (Test-Path $pub)) {
-            Write-Host "Œx: ŒöŠJŒ®‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ => $pub"
+            Write-Host "è­¦å‘Š: å…¬é–‹éµãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ => $pub"
             continue
         }
         $pubXml = Get-Content -Path $pub -Raw
@@ -183,7 +183,7 @@ function EncryptFileMulti {
 
         $modulusBase64 = Get-ModulusFromXmlString $pubXml
         if (-not $modulusBase64) {
-            Write-Host "Œx: Modulusæ“¾¸”s => $pub"
+            Write-Host "è­¦å‘Š: Moduluså–å¾—å¤±æ•— => $pub"
             $rsa.Dispose()
             continue
         }
@@ -197,19 +197,19 @@ function EncryptFileMulti {
     }
 
     if ($rsaEntries.Count -eq 0) {
-        Write-Host "ƒGƒ‰[: —LŒø‚ÈŒöŠJŒ®‚ª0Œ => ˆÃ†‰»‚Å‚«‚Ü‚¹‚ñ"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: æœ‰åŠ¹ãªå…¬é–‹éµãŒ0ä»¶ => æš—å·åŒ–ã§ãã¾ã›ã‚“"
         return
     }
 
-    # o—Íƒtƒ@ƒCƒ‹‘‚«‚İ
+    # å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ«æ›¸ãè¾¼ã¿
     $fsOut = [System.IO.File]::Open($outEncPath, 'Create')
     $bw = New-Object System.IO.BinaryWriter($fsOut)
     try {
-        # æ“ª: ƒGƒ“ƒgƒŠ” n
+        # å…ˆé ­: ã‚¨ãƒ³ãƒˆãƒªæ•° n
         $n = $rsaEntries.Count
         $bw.Write([BitConverter]::GetBytes($n), 0, 4)
 
-        # ŠeƒGƒ“ƒgƒŠ
+        # å„ã‚¨ãƒ³ãƒˆãƒª
         foreach ($entry in $rsaEntries) {
             $modBytes = [System.Text.Encoding]::UTF8.GetBytes($entry.Modulus)
             $bw.Write([BitConverter]::GetBytes($modBytes.Length), 0, 4)
@@ -223,17 +223,17 @@ function EncryptFileMulti {
         # IV
         $bw.Write($aes.IV, 0, $aes.IV.Length)
 
-        # AESˆÃ† (ƒtƒ@ƒCƒ‹–¼ + –{‘Ì)
+        # AESæš—å· (ãƒ•ã‚¡ã‚¤ãƒ«å + æœ¬ä½“)
         $encryptor    = $aes.CreateEncryptor()
         $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsOut, $encryptor, [System.Security.Cryptography.CryptoStreamMode]::Write)
 
-        # ƒtƒ@ƒCƒ‹–¼
+        # ãƒ•ã‚¡ã‚¤ãƒ«å
         $fileNameBytes = [System.Text.Encoding]::UTF8.GetBytes($baseFileName)
         $lenBuf        = [BitConverter]::GetBytes($fileNameBytes.Length)
         $cryptoStream.Write($lenBuf, 0, 4)
         $cryptoStream.Write($fileNameBytes, 0, $fileNameBytes.Length)
 
-        # –{‘Ì
+        # æœ¬ä½“
         $fsIn = [System.IO.File]::OpenRead($InputFilePath)
         try {
             $bufSize = $rsabit
@@ -255,11 +255,11 @@ function EncryptFileMulti {
         $aes.Dispose()
     }
 
-    Write-Host "ˆÃ†‰»Š®—¹: $outEncPath (ŒöŠJŒ®”=$($rsaEntries.Count))"
+    Write-Host "æš—å·åŒ–å®Œäº†: $outEncPath (å…¬é–‹éµæ•°=$($rsaEntries.Count))"
 }
 
 #-----------------------------------------------------------------------
-# (F) •œ† (keys “à‚Ì‘S .pvtkey ‚ğ‚·) + ƒtƒ@ƒCƒ‹ã‘‚«ƒ`ƒFƒbƒN
+# (F) å¾©å· (keys å†…ã®å…¨ .pvtkey ã‚’è©¦ã™) + ãƒ•ã‚¡ã‚¤ãƒ«ä¸Šæ›¸ããƒã‚§ãƒƒã‚¯
 #-----------------------------------------------------------------------
 function DecryptFileMultiAuto {
     param(
@@ -268,13 +268,13 @@ function DecryptFileMultiAuto {
     )
 
     if (-not (Test-Path $InputFilePath)) {
-        Write-Host "ƒGƒ‰[: •œ†‘ÎÛƒtƒ@ƒCƒ‹‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñ => $InputFilePath"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: å¾©å·å¯¾è±¡ãƒ•ã‚¡ã‚¤ãƒ«ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ => $InputFilePath"
         return
     }
 
     $pvtList = Get-ChildItem -Path $keysFolder -Filter '*.pvtkey' -File
     if ($pvtList.Count -eq 0) {
-        Write-Host "ƒGƒ‰[: ”é–§Œ®(.pvtkey)‚ª1‚Â‚à‚ ‚è‚Ü‚¹‚ñB"
+        Write-Host "ã‚¨ãƒ©ãƒ¼: ç§˜å¯†éµ(.pvtkey)ãŒ1ã¤ã‚‚ã‚ã‚Šã¾ã›ã‚“ã€‚"
         return
     }
 
@@ -284,42 +284,42 @@ function DecryptFileMultiAuto {
     try {
         $nBuf = $br.ReadBytes(4)
         if ($nBuf.Count -lt 4) {
-            Write-Host "ƒGƒ‰[: ŒöŠJŒ®ƒGƒ“ƒgƒŠ”‚ğ“Ç‚ß‚Ü‚¹‚ñBƒtƒ@ƒCƒ‹”j‘¹?"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: å…¬é–‹éµã‚¨ãƒ³ãƒˆãƒªæ•°ã‚’èª­ã‚ã¾ã›ã‚“ã€‚ãƒ•ã‚¡ã‚¤ãƒ«ç ´æ?"
             return
         }
         $n = [BitConverter]::ToInt32($nBuf, 0)
         if ($n -le 0 -or $n -gt 100) {
-            Write-Host "ƒGƒ‰[: ŒöŠJŒ®ƒGƒ“ƒgƒŠ”($n)‚ª•s³"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: å…¬é–‹éµã‚¨ãƒ³ãƒˆãƒªæ•°($n)ãŒä¸æ­£"
             return
         }
-        Write-Host "ŒöŠJŒ®ƒGƒ“ƒgƒŠ”: $n"
+        Write-Host "å…¬é–‹éµã‚¨ãƒ³ãƒˆãƒªæ•°: $n"
 
         $entries = @()
         for($i=0; $i -lt $n; $i++) {
             $modLenBuf = $br.ReadBytes(4)
-            if ($modLenBuf.Count -lt 4) { Write-Host "Modulus’·“Ç¸”s"; return }
+            if ($modLenBuf.Count -lt 4) { Write-Host "Modulusé•·èª­è¾¼å¤±æ•—"; return }
             $modLen = [BitConverter]::ToInt32($modLenBuf, 0)
             if ($modLen -le 0 -or $modLen -gt 1024) {
-                Write-Host "Modulus’·($modLen)‚ª•s³"
+                Write-Host "Modulusé•·($modLen)ãŒä¸æ­£"
                 return
             }
             $modStrBytes = $br.ReadBytes($modLen)
             if ($modStrBytes.Count -ne $modLen) {
-                Write-Host "Modulus•¶š—ñ“Ç¸”s"
+                Write-Host "Modulusæ–‡å­—åˆ—èª­è¾¼å¤±æ•—"
                 return
             }
             $modStr = [System.Text.Encoding]::UTF8.GetString($modStrBytes)
 
             $encLenBuf = $br.ReadBytes(4)
-            if ($encLenBuf.Count -lt 4) { Write-Host "RSAˆÃ†Œ®’·“Ç¸”s"; return }
+            if ($encLenBuf.Count -lt 4) { Write-Host "RSAæš—å·éµé•·èª­è¾¼å¤±æ•—"; return }
             $encLen = [BitConverter]::ToInt32($encLenBuf, 0)
             if ($encLen -le 0 -or $encLen -gt $rsabit) {
-                Write-Host "ƒGƒ‰[: RSAˆÃ†Œ®’·($encLen)‚ª•s³"
+                Write-Host "ã‚¨ãƒ©ãƒ¼: RSAæš—å·éµé•·($encLen)ãŒä¸æ­£"
                 return
             }
             $encKey = $br.ReadBytes($encLen)
             if ($encKey.Count -ne $encLen) {
-                Write-Host "ƒGƒ‰[: RSAˆÃ†Œ®“Ç¸”s"
+                Write-Host "ã‚¨ãƒ©ãƒ¼: RSAæš—å·éµèª­è¾¼å¤±æ•—"
                 return
             }
 
@@ -332,11 +332,11 @@ function DecryptFileMultiAuto {
         # IV
         $iv = $br.ReadBytes(16)
         if ($iv.Count -ne 16) {
-            Write-Host "ƒGƒ‰[: IV“Ç¸”s"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: IVèª­è¾¼å¤±æ•—"
             return
         }
 
-        #=== ‘S”é–§Œ®‚ğ‚µ‚Ä AESŒ®‚ğ•œŒ³ ===
+        #=== å…¨ç§˜å¯†éµã‚’è©¦ã—ã¦ AESéµã‚’å¾©å…ƒ ===
         $aesKey = $null
         $success = $false
 
@@ -347,11 +347,11 @@ function DecryptFileMultiAuto {
 
             $modPvt = Get-ModulusFromXmlString $pvtXml
             if (-not $modPvt) {
-                Write-Host "  Œx: $($pvtItem.Name) ‚©‚çModulusæ“¾‚Å‚«‚¸ -> ƒXƒLƒbƒv"
+                Write-Host "  è­¦å‘Š: $($pvtItem.Name) ã‹ã‚‰Moduluså–å¾—ã§ããš -> ã‚¹ã‚­ãƒƒãƒ—"
                 $rsa.Dispose()
                 continue
             }
-            Write-Host "¨ s: $($pvtItem.Name) / Modulus=$modPvt"
+            Write-Host "â†’ è©¦è¡Œ: $($pvtItem.Name) / Modulus=$modPvt"
 
             $hit = $false
             foreach ($ent in $entries) {
@@ -359,14 +359,14 @@ function DecryptFileMultiAuto {
                     try {
                         $tmpKey = $rsa.Decrypt($ent.EncKey, $false)
                         if ($tmpKey) {
-                            Write-Host "   ¬Œ÷: $($pvtItem.Name) ‚ÅAESŒ®•œ†!"
+                            Write-Host "   æˆåŠŸ: $($pvtItem.Name) ã§AESéµå¾©å·!"
                             $aesKey = $tmpKey
                             $hit    = $true
                             break
                         }
                     }
                     catch {
-                        Write-Host "   RSA•œ†¸”s => •sˆê’v"
+                        Write-Host "   RSAå¾©å·å¤±æ•— => ä¸ä¸€è‡´"
                     }
                 }
             }
@@ -378,11 +378,11 @@ function DecryptFileMultiAuto {
         }
 
         if (-not $success) {
-            Write-Host "ƒGƒ‰[: keys“à‚Ì‚¢‚¸‚ê‚Ì”é–§Œ®‚Å‚à•œ†‚Å‚«‚Ü‚¹‚ñ‚Å‚µ‚½"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: keyså†…ã®ã„ãšã‚Œã®ç§˜å¯†éµã§ã‚‚å¾©å·ã§ãã¾ã›ã‚“ã§ã—ãŸ"
             return
         }
 
-        #=== AES•œ†ƒXƒgƒŠ[ƒ€ ===
+        #=== AESå¾©å·ã‚¹ãƒˆãƒªãƒ¼ãƒ  ===
         $aes = [System.Security.Cryptography.Aes]::Create()
         $aes.KeySize = 256
         $aes.BlockSize = 128
@@ -394,40 +394,40 @@ function DecryptFileMultiAuto {
         $decryptor = $aes.CreateDecryptor()
         $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsIn, $decryptor, [System.Security.Cryptography.CryptoStreamMode]::Read)
 
-        # ƒtƒ@ƒCƒ‹–¼æ“¾
+        # ãƒ•ã‚¡ã‚¤ãƒ«åå–å¾—
         $fnameLenBuf = New-Object byte[] 4
         $count = $cryptoStream.Read($fnameLenBuf, 0, 4)
         if ($count -lt 4) {
-            Write-Host "ƒGƒ‰[: ƒtƒ@ƒCƒ‹–¼’·(4byte)‚ª“Ç‚ß‚Ü‚¹‚ñ"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: ãƒ•ã‚¡ã‚¤ãƒ«åé•·(4byte)ãŒèª­ã‚ã¾ã›ã‚“"
             return
         }
         $fnameLen = [BitConverter]::ToInt32($fnameLenBuf, 0)
         if ($fnameLen -le 0 -or $fnameLen -gt 512) {
-            Write-Host "ƒGƒ‰[: ƒtƒ@ƒCƒ‹–¼’·($fnameLen)‚ª•s³"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: ãƒ•ã‚¡ã‚¤ãƒ«åé•·($fnameLen)ãŒä¸æ­£"
             return
         }
 
         $fnameBuf = New-Object byte[] $fnameLen
         $count = $cryptoStream.Read($fnameBuf, 0, $fnameLen)
         if ($count -lt $fnameLen) {
-            Write-Host "ƒGƒ‰[: ƒtƒ@ƒCƒ‹–¼‚ğÅŒã‚Ü‚Å“Ç‚ß‚Ü‚¹‚ñ"
+            Write-Host "ã‚¨ãƒ©ãƒ¼: ãƒ•ã‚¡ã‚¤ãƒ«åã‚’æœ€å¾Œã¾ã§èª­ã‚ã¾ã›ã‚“"
             return
         }
         $originalFileName = [System.Text.Encoding]::UTF8.GetString($fnameBuf)
 
-        Write-Host "•œ†: Œ³ƒtƒ@ƒCƒ‹–¼=$originalFileName"
+        Write-Host "å¾©å·: å…ƒãƒ•ã‚¡ã‚¤ãƒ«å=$originalFileName"
 
-        # o—Íƒtƒ@ƒCƒ‹ƒpƒX
+        # å‡ºåŠ›ãƒ•ã‚¡ã‚¤ãƒ«ãƒ‘ã‚¹
         $folder = [System.IO.Path]::GetDirectoryName($InputFilePath)
         $outFilePath = Join-Path $folder $originalFileName
 
-        # ã‘‚«Šm”F
+        # ä¸Šæ›¸ãç¢ºèª
         $ok = Confirm-Overwrite $outFilePath
         if (-not $ok) {
             return
         }
 
-        # ‘‚«‚İ
+        # æ›¸ãè¾¼ã¿
         $fsOut = [System.IO.File]::Open($outFilePath, 'Create')
         try {
             $bufSize = $rsabit
@@ -442,7 +442,7 @@ function DecryptFileMultiAuto {
             $fsOut.Close()
         }
 
-        Write-Host "•œ†Š®—¹: $outFilePath"
+        Write-Host "å¾©å·å®Œäº†: $outFilePath"
 
         $cryptoStream.Close()
         $cryptoStream.Dispose()
@@ -456,7 +456,7 @@ function DecryptFileMultiAuto {
 }
 
 #-----------------------------------------------------------------------
-# (G) ŒöŠJŒ®ƒŠƒXƒg (CheckedListBox‚Å•¡”‘I‘ğ)
+# (G) å…¬é–‹éµãƒªã‚¹ãƒˆ (CheckedListBoxã§è¤‡æ•°é¸æŠ)
 #-----------------------------------------------------------------------
 function Load-PubKeyList {
     $pubkeyFiles = Get-ChildItem -Path $keysFolder -Filter '*.pubkey' -File -ErrorAction SilentlyContinue
@@ -468,15 +468,15 @@ function Load-PubKeyList {
 }
 
 #-----------------------------------------------------------------------
-# (H) GUI \’z
+# (H) GUI æ§‹ç¯‰
 #-----------------------------------------------------------------------
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Multi-Key: Encrypt(Multi-Pub) & Decrypt(AutoAll-Pvt) w/ KeyPairCheck"
+$form.Text = "EasyCrypt.ps1"
 $form.Size = New-Object System.Drawing.Size(620,520)
 $form.StartPosition = "CenterScreen"
 
 $dropLabel = New-Object System.Windows.Forms.Label
-$dropLabel.Text = "‚±‚±‚Éƒtƒ@ƒCƒ‹‚ğƒhƒƒbƒv"
+$dropLabel.Text = "ã“ã“ã«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ‰ãƒ­ãƒƒãƒ—"
 $dropLabel.Size = New-Object System.Drawing.Size(580,150)
 $dropLabel.Location = New-Object System.Drawing.Point(10,10)
 $dropLabel.BorderStyle = "Fixed3D"
@@ -489,7 +489,7 @@ $fileListBox.Size = New-Object System.Drawing.Size(580,100)
 $fileListBox.Location = New-Object System.Drawing.Point(10,170)
 $form.Controls.Add($fileListBox)
 
-# ƒhƒ‰ƒbƒOƒCƒxƒ“ƒg
+# ãƒ‰ãƒ©ãƒƒã‚°ã‚¤ãƒ™ãƒ³ãƒˆ
 $dropLabel.Add_DragEnter({
     param($sender, $e)
     if ($e.Data.GetDataPresent([System.Windows.Forms.DataFormats]::FileDrop)) {
@@ -507,12 +507,12 @@ $dropLabel.Add_DragDrop({
             $null = $fileListBox.Items.Add($f)
         }
     }
-    $dropLabel.Text = "ƒtƒ@ƒCƒ‹”: $($fileListBox.Items.Count)"
+    $dropLabel.Text = "ãƒ•ã‚¡ã‚¤ãƒ«æ•°: $($fileListBox.Items.Count)"
 })
 
-# ŒöŠJŒ®ƒ`ƒFƒbƒNƒŠƒXƒg
+# å…¬é–‹éµãƒã‚§ãƒƒã‚¯ãƒªã‚¹ãƒˆ
 $ckLabel = New-Object System.Windows.Forms.Label
-$ckLabel.Text = "•¡”ŒöŠJŒ®‚ğƒ`ƒFƒbƒN:"
+$ckLabel.Text = "è¤‡æ•°å…¬é–‹éµã‚’ãƒã‚§ãƒƒã‚¯:"
 $ckLabel.Location = New-Object System.Drawing.Point(10,280)
 $ckLabel.Size = New-Object System.Drawing.Size(180,20)
 $form.Controls.Add($ckLabel)
@@ -531,26 +531,26 @@ function RefreshKeyList {
 }
 RefreshKeyList
 
-# Œ®¶¬ƒ{ƒ^ƒ“
+# éµç”Ÿæˆãƒœã‚¿ãƒ³
 $genBtn = New-Object System.Windows.Forms.Button
-$genBtn.Text = "Œ®¶¬"
+$genBtn.Text = "éµç”Ÿæˆ"
 $genBtn.Location = New-Object System.Drawing.Point(230,300)
 $genBtn.Size = New-Object System.Drawing.Size(80,30)
 $genBtn.Add_Click({
     $newId = Generate-KeyPair
     if ($newId) {
-        [System.Windows.Forms.MessageBox]::Show("V‚µ‚¢Œ®‚ğ¶¬•ŒŸØ‚µ‚Ü‚µ‚½: $newId")
+        [System.Windows.Forms.MessageBox]::Show("æ–°ã—ã„éµã‚’ç”Ÿæˆï¼†æ¤œè¨¼ã—ã¾ã—ãŸ: $newId")
         RefreshKeyList
     }
     else {
-        [System.Windows.Forms.MessageBox]::Show("Œ®ƒyƒA‚Ì¶¬‚Ü‚½‚ÍŒŸØ‚É¸”s‚µ‚Ü‚µ‚½B","ƒGƒ‰[")
+        [System.Windows.Forms.MessageBox]::Show("éµãƒšã‚¢ã®ç”Ÿæˆã¾ãŸã¯æ¤œè¨¼ã«å¤±æ•—ã—ã¾ã—ãŸã€‚","ã‚¨ãƒ©ãƒ¼")
     }
 })
 $form.Controls.Add($genBtn)
 
-# Ä“Çƒ{ƒ^ƒ“
+# å†èª­è¾¼ãƒœã‚¿ãƒ³
 $reloadBtn = New-Object System.Windows.Forms.Button
-$reloadBtn.Text = "Ä“Ç"
+$reloadBtn.Text = "å†èª­è¾¼"
 $reloadBtn.Location = New-Object System.Drawing.Point(230,340)
 $reloadBtn.Size = New-Object System.Drawing.Size(80,30)
 $reloadBtn.Add_Click({
@@ -558,18 +558,18 @@ $reloadBtn.Add_Click({
 })
 $form.Controls.Add($reloadBtn)
 
-# Encrypt ƒ{ƒ^ƒ“ (•¡”ŒöŠJŒ®‘I‘ğ)
+# Encrypt ãƒœã‚¿ãƒ³ (è¤‡æ•°å…¬é–‹éµé¸æŠ)
 $encBtn = New-Object System.Windows.Forms.Button
-$encBtn.Text = "ˆÃ†‰»"
+$encBtn.Text = "æš—å·åŒ–"
 $encBtn.Location = New-Object System.Drawing.Point(10,430)
 $encBtn.Size = New-Object System.Drawing.Size(100,30)
 $encBtn.Add_Click({
     if ($fileListBox.Items.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("ˆÃ†‰»‚·‚éƒtƒ@ƒCƒ‹‚ª‚ ‚è‚Ü‚¹‚ñB")
+        [System.Windows.Forms.MessageBox]::Show("æš—å·åŒ–ã™ã‚‹ãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚Šã¾ã›ã‚“ã€‚")
         return
     }
 
-    # ƒ`ƒFƒbƒN‚³‚ê‚½ŒöŠJŒ®‚ğûW
+    # ãƒã‚§ãƒƒã‚¯ã•ã‚ŒãŸå…¬é–‹éµã‚’åé›†
     $selectedPubs = @()
     for($i=0; $i -lt $pubKeyCheckedList.Items.Count; $i++){
         if ($pubKeyCheckedList.GetItemChecked($i)) {
@@ -579,47 +579,47 @@ $encBtn.Add_Click({
         }
     }
     if ($selectedPubs.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("ŒöŠJŒ®‚ğ1‚ÂˆÈãƒ`ƒFƒbƒN‚µ‚Ä‚­‚¾‚³‚¢B")
+        [System.Windows.Forms.MessageBox]::Show("å…¬é–‹éµã‚’1ã¤ä»¥ä¸Šãƒã‚§ãƒƒã‚¯ã—ã¦ãã ã•ã„ã€‚")
         return
     }
 
     foreach ($f in $fileListBox.Items) {
         EncryptFileMulti -PublicKeyPaths $selectedPubs -InputFilePath $f
     }
-    [System.Windows.Forms.MessageBox]::Show("ˆÃ†‰»‚ªŠ®—¹‚µ‚Ü‚µ‚½B")
+    [System.Windows.Forms.MessageBox]::Show("æš—å·åŒ–ãŒå®Œäº†ã—ã¾ã—ãŸã€‚")
     $fileListBox.Items.Clear()
-    $dropLabel.Text = "‚±‚±‚Éƒtƒ@ƒCƒ‹‚ğƒhƒƒbƒv"
+    $dropLabel.Text = "ã“ã“ã«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ‰ãƒ­ãƒƒãƒ—"
 })
 $form.Controls.Add($encBtn)
 
-# Decrypt ƒ{ƒ^ƒ“ (keys“à‚Ì‘Spvtkey‚ğ©“®s)
+# Decrypt ãƒœã‚¿ãƒ³ (keyså†…ã®å…¨pvtkeyã‚’è‡ªå‹•è©¦è¡Œ)
 $decBtn = New-Object System.Windows.Forms.Button
 $decBtn.Text = "Decrypt"
 $decBtn.Location = New-Object System.Drawing.Point(120,430)
 $decBtn.Size = New-Object System.Drawing.Size(100,30)
 $decBtn.Add_Click({
     if ($fileListBox.Items.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("•œ†‚·‚éƒtƒ@ƒCƒ‹‚ª‚ ‚è‚Ü‚¹‚ñB")
+        [System.Windows.Forms.MessageBox]::Show("å¾©å·ã™ã‚‹ãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚Šã¾ã›ã‚“ã€‚")
         return
     }
 
     foreach ($f in $fileListBox.Items) {
         DecryptFileMultiAuto -InputFilePath $f
     }
-    [System.Windows.Forms.MessageBox]::Show("•œ†s‚ªŠ®—¹‚µ‚Ü‚µ‚½B(¬Œ÷/¸”s‚ÍƒRƒ“ƒ\[ƒ‹QÆ)")
+    [System.Windows.Forms.MessageBox]::Show("å¾©å·è©¦è¡ŒãŒå®Œäº†ã—ã¾ã—ãŸã€‚(æˆåŠŸ/å¤±æ•—ã¯ã‚³ãƒ³ã‚½ãƒ¼ãƒ«å‚ç…§)")
     $fileListBox.Items.Clear()
-    $dropLabel.Text = "‚±‚±‚Éƒtƒ@ƒCƒ‹‚ğƒhƒƒbƒv"
+    $dropLabel.Text = "ã“ã“ã«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ‰ãƒ­ãƒƒãƒ—"
 })
 $form.Controls.Add($decBtn)
 
-# ƒŠƒXƒgƒNƒŠƒA
+# ãƒªã‚¹ãƒˆã‚¯ãƒªã‚¢
 $clearBtn = New-Object System.Windows.Forms.Button
-$clearBtn.Text = "ƒNƒŠƒA"
+$clearBtn.Text = "ã‚¯ãƒªã‚¢"
 $clearBtn.Location = New-Object System.Drawing.Point(230,430)
 $clearBtn.Size = New-Object System.Drawing.Size(80,30)
 $clearBtn.Add_Click({
     $fileListBox.Items.Clear()
-    $dropLabel.Text = "‚±‚±‚Éƒtƒ@ƒCƒ‹‚ğƒhƒƒbƒv"
+    $dropLabel.Text = "ã“ã“ã«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ãƒ‰ãƒ­ãƒƒãƒ—"
 })
 $form.Controls.Add($clearBtn)
 
