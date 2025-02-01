@@ -1,109 +1,111 @@
 ﻿############################################################################
 # EasyCrypt.ps1
+#   - 複数公開鍵で暗号化/復号
+#   - ダイアログがメイン画面に隠れないようオーナーフォーム指定
+#   - 上書き確認時に、上書き対象ファイル名を表示するよう修正
 ############################################################################
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.IO
 
-$rsabit = 4096
-
-#=== 1) グローバル設定: keysフォルダ (カレント直下) =====================
-$keysFolder = Join-Path (Get-Location) "keys"
-if (-not (Test-Path $keysFolder)) {
-    New-Item -ItemType Directory -Path $keysFolder | Out-Null
+$global:rsabit = 4096
+$global:keysFolder = Join-Path (Get-Location) "keys"
+if (-not (Test-Path $global:keysFolder)) {
+    New-Item -ItemType Directory -Path $global:keysFolder | Out-Null
 }
 
-#-----------------------------------------------------------------------
-# タイムアウト付きメッセージボックスを表示する関数
-#   - Yes/Noボタンを用意し、タイムアウト経過で自動クローズ
-#   - 戻り値: [System.Windows.Forms.DialogResult] (Yes / No / None)
-#-----------------------------------------------------------------------
+#====================== (1) Show-MessageBoxWithTimeout =====================
 function Show-MessageBoxWithTimeout {
     param(
         [Parameter(Mandatory)]
         [string]$Message,
         [Parameter(Mandatory)]
         [string]$Title,
-        [int]$TimeoutSeconds = 10
+        [int]$TimeoutSeconds = 10,
+        [System.Windows.Forms.Form]$OwnerForm
     )
 
-    # フォーム作成
     $form = New-Object System.Windows.Forms.Form
     $form.Text = $Title
     $form.Width = 400
-    $form.Height = 150
+    $form.Height = 180  # 高さを少し上げてもよい
     $form.StartPosition = "CenterScreen"
 
+    # ラベル
     $label = New-Object System.Windows.Forms.Label
     $label.Text = $Message
     $label.AutoSize = $true
     $label.Left = 20
     $label.Top = 20
-    # 幅を調整して折り返す場合は下記を追加調整
-    # $label.MaximumSize = New-Object System.Drawing.Size(360, 0)
-    # $label.AutoSize = $true
     $form.Controls.Add($label)
 
-    # Yesボタン
+    # Yesボタン (位置を下げる)
     $yesButton = New-Object System.Windows.Forms.Button
     $yesButton.Text = "Yes"
     $yesButton.Left = 50
-    $yesButton.Top = 70
+    $yesButton.Top = 100  # 変更: 70 => 100
     $yesButton.Add_Click({
         $form.Tag = [System.Windows.Forms.DialogResult]::Yes
         $form.Close()
     })
     $form.Controls.Add($yesButton)
 
-    # Noボタン
+    # Noボタン (位置を下げる)
     $noButton = New-Object System.Windows.Forms.Button
     $noButton.Text = "No"
     $noButton.Left = 150
-    $noButton.Top = 70
+    $noButton.Top = 100  # 変更: 70 => 100
     $noButton.Add_Click({
         $form.Tag = [System.Windows.Forms.DialogResult]::No
         $form.Close()
     })
     $form.Controls.Add($noButton)
 
-    # タイマー
+    # タイマー(秒数経過で自動クローズ)
     $timer = New-Object System.Windows.Forms.Timer
     $timer.Interval = 1000
     $count = 0
     $timer.Add_Tick({
         $count++
-        if($count -ge $TimeoutSeconds) {
+        if ($count -ge $TimeoutSeconds) {
             $form.Tag = [System.Windows.Forms.DialogResult]::None
             $form.Close()
         }
     })
     $timer.Start()
 
-    $null = $form.ShowDialog()
+    if ($OwnerForm) {
+        $null = $form.ShowDialog($OwnerForm)
+    } else {
+        $null = $form.ShowDialog()
+    }
     $timer.Stop()
-
     return $form.Tag
 }
 
-#-----------------------------------------------------------------------
-# (A) ファイル上書き可否をユーザに確認する関数 (タイムアウト版)
-#-----------------------------------------------------------------------
+
+#====================== (2) Confirm-Overwrite =============================
 function Confirm-Overwrite {
     param(
         [Parameter(Mandatory)]
-        [string]$TargetFilePath
+        [string]$TargetFilePath,
+        [System.Windows.Forms.Form]$OwnerForm
     )
 
     if (-not (Test-Path $TargetFilePath)) {
         return $true
     }
 
-    $msg   = "既にファイルが存在します。上書きしますか？`nYes = 上書き, No = スキップ"
-    $title = "上書き確認"
-    $timeoutSeconds = 10  # タイムアウト(秒)を必要に応じて調整
+    # ファイル名のみ取得
+    $fileName = [System.IO.Path]::GetFileName($TargetFilePath)
 
-    $res = Show-MessageBoxWithTimeout -Message $msg -Title $title -TimeoutSeconds $timeoutSeconds
+    # ファイル名だけをメッセージに表示
+    $msg = "以下のファイルが既に存在します:`n$fileName`n" +
+           "`n上書きしますか？(Yes=上書き / No=スキップ)"
+
+    $title = "上書き確認"
+    $res = Show-MessageBoxWithTimeout -Message $msg -Title $title -TimeoutSeconds 10 -OwnerForm $OwnerForm
 
     if ($res -eq [System.Windows.Forms.DialogResult]::Yes) {
         Write-Host "上書きを承諾 => $TargetFilePath"
@@ -115,84 +117,22 @@ function Confirm-Overwrite {
     }
 }
 
-#-----------------------------------------------------------------------
-# (B) 公開鍵/秘密鍵XMLペアが正しく対応しているかを検証
-#-----------------------------------------------------------------------
-function Test-RSAKeyPair {
-    [CmdletBinding()]
+#====================== (3) Load-PrivateKeyXmlFromUserStore (例) ==========
+function Load-PrivateKeyXmlFromUserStore {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$PrivateKeyXml,
-        [Parameter(Mandatory=$true)]
-        [string]$PublicKeyXml
+        [string]$KeyContainerName
     )
-
-    try {
-        # --- 秘密鍵を読み込むRSAオブジェクト ---
-        $rsaPri = New-Object System.Security.Cryptography.RSACryptoServiceProvider
-        $rsaPri.FromXmlString($PrivateKeyXml)
-
-        # --- 公開鍵を読み込むRSAオブジェクト ---
-        $rsaPub = New-Object System.Security.Cryptography.RSACryptoServiceProvider
-        $rsaPub.FromXmlString($PublicKeyXml)
-
-        # --- テスト用データ (署名→検証) ---
-        $testData = [System.Text.Encoding]::UTF8.GetBytes("KeyPair検証用のサンプルデータ")
-
-        # --- 秘密鍵で署名 ---
-        $signature = $rsaPri.SignData(
-            $testData,
-            [System.Security.Cryptography.SHA256CryptoServiceProvider]::new()
-        )
-
-        # --- 公開鍵で検証 ---
-        $isValid = $rsaPub.VerifyData(
-            $testData,
-            [System.Security.Cryptography.SHA256CryptoServiceProvider]::new(),
-            $signature
-        )
-        return $isValid
-    }
-    catch {
-        Write-Host "鍵ペアの検証中にエラーが発生しました: $($_.Exception.Message)"
-        return $false
-    }
-}
-
-#-----------------------------------------------------------------------
-# (C) 鍵ペア生成
-#    => 生成直後に Test-RSAKeyPair で検証
-#-----------------------------------------------------------------------
-function Generate-KeyPair {
-    $id = (Get-Date).ToString("yyyyMMddHHmmss")
-
-    # 4096bit の RSA鍵を作成
-    $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider($rsabit)
-    $privateXml = $rsa.ToXmlString($true)
-    $publicXml  = $rsa.ToXmlString($false)
+    $provType = 1  
+    $provider = "Microsoft Strong Cryptographic Provider"
+    $csp = New-Object System.Security.Cryptography.CspParameters($provType, $provider, $KeyContainerName)
+    $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider($csp)
+    $xml = $rsa.ToXmlString($true)
     $rsa.Dispose()
-
-    # まず検証
-    $testOK = Test-RSAKeyPair -PrivateKeyXml $privateXml -PublicKeyXml $publicXml
-    if (-not $testOK) {
-        Write-Host "エラー: 作成した鍵ペアが正しく対応していません。（署名検証失敗）"
-        return $null
-    }
-
-    # 検証OKならファイル保存
-    $pvtPath = Join-Path $keysFolder "$id.pvtkey"
-    $pubPath = Join-Path $keysFolder "$id.pubkey"
-
-    $privateXml | Out-File -FilePath $pvtPath -Encoding UTF8 -Force
-    $publicXml  | Out-File -FilePath $pubPath -Encoding UTF8 -Force
-
-    Write-Host "鍵ペア生成＆検証OK: $pvtPath, $pubPath"
-    return $id
+    return $xml
 }
 
-#-----------------------------------------------------------------------
-# (D) 公開鍵XMLから Modulus を抽出
-#-----------------------------------------------------------------------
+#====================== (4) Get-ModulusFromXmlString ======================
 function Get-ModulusFromXmlString {
     param([string]$XmlString)
     if (-not $XmlString) { return $null }
@@ -201,39 +141,44 @@ function Get-ModulusFromXmlString {
     return $spl[1].Trim()
 }
 
-#-----------------------------------------------------------------------
-# (E) 複数公開鍵で暗号化 (ファイル先頭にエントリを並べる)
-#-----------------------------------------------------------------------
+#====================== (5) EncryptFileMulti =============================
 function EncryptFileMulti {
     param(
-        [Parameter(Mandatory)]
         [string[]]$PublicKeyPaths,
-
-        [Parameter(Mandatory)]
-        [string]$InputFilePath
+        [string]$InputFilePath,
+        [System.Windows.Forms.Form]$OwnerForm
     )
 
     if ($PublicKeyPaths.Count -eq 0) {
-        Write-Host "エラー: 公開鍵が1つも指定されていません。"
+        [System.Windows.Forms.MessageBox]::Show(
+            $OwnerForm,
+            "公開鍵を1つ以上指定してください。",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
     if (-not (Test-Path $InputFilePath)) {
-        Write-Host "エラー: 暗号化対象ファイルが見つかりません。 -> $InputFilePath"
+        [System.Windows.Forms.MessageBox]::Show(
+            $OwnerForm,
+            "暗号化対象ファイルが見つかりません: `n$InputFilePath",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
 
-    # 出力ファイル => .enc
     $baseFileName = [System.IO.Path]::GetFileName($InputFilePath)
-    $folder       = [System.IO.Path]::GetDirectoryName($InputFilePath)
-    $outEncPath   = Join-Path $folder ($baseFileName + ".enc")
+    $folder = [System.IO.Path]::GetDirectoryName($InputFilePath)
+    $outEncPath = Join-Path $folder ($baseFileName + ".enc")
 
-    # 上書き確認
-    $ok = Confirm-Overwrite $outEncPath
-    if (-not $ok) {
+    if (-not (Confirm-Overwrite $outEncPath -OwnerForm $OwnerForm)) {
         return
     }
 
-    # AES鍵 作成
+    # AES
     $aes = [System.Security.Cryptography.Aes]::Create()
     $aes.KeySize = 256
     $aes.BlockSize = 128
@@ -242,50 +187,44 @@ function EncryptFileMulti {
     $aes.GenerateKey()
     $aes.GenerateIV()
 
-    # --- 生成したAESキーをSecureStringに保持 ---
-    $Global:secureAesKey = ConvertTo-SecureString ([Convert]::ToBase64String($aes.Key)) -AsPlainText -Force
-
-    # 公開鍵ごとに RSA暗号 (OAEP)
     $rsaEntries = @()
-    foreach ($pub in $PublicKeyPaths) {
-        if (-not (Test-Path $pub)) {
-            Write-Host "警告: 公開鍵が見つかりません => $pub"
+    foreach ($pubFile in $PublicKeyPaths) {
+        if (-not (Test-Path $pubFile)) {
+            Write-Host "警告: 公開鍵が見つかりません => $pubFile"
             continue
         }
-        $pubXml = Get-Content -Path $pub -Raw
-        $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
-        $rsa.FromXmlString($pubXml)
+        $pubXml = Get-Content -Path $pubFile -Raw
+        $rsaPub = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+        $rsaPub.FromXmlString($pubXml)
 
-        $modulusBase64 = Get-ModulusFromXmlString $pubXml
-        if (-not $modulusBase64) {
-            Write-Host "警告: Modulus取得失敗 => $pub"
-            $rsa.Dispose()
+        $modulus = Get-ModulusFromXmlString $pubXml
+        if (-not $modulus) {
+            Write-Host "警告: Modulus取得失敗 => $pubFile"
+            $rsaPub.Dispose()
             continue
         }
 
-        # ★RSA-OAEPに変更 (true)
-        $encKey = $rsa.Encrypt($aes.Key, $true)
+        # RSA.Encrypt (PKCS#1 v1.5)
+        $encKey = $rsaPub.Encrypt($aes.Key, $false)
+        $rsaPub.Dispose()
+
         $rsaEntries += [PSCustomObject]@{
-            Modulus = $modulusBase64
+            Modulus = $modulus
             EncKey  = $encKey
         }
-        $rsa.Dispose()
     }
 
     if ($rsaEntries.Count -eq 0) {
-        Write-Host "エラー: 有効な公開鍵が0件 => 暗号化できません"
+        Write-Host "エラー: 有効な公開鍵が0件 => 暗号化中止"
         return
     }
 
-    # 出力ファイル書き込み
     $fsOut = [System.IO.File]::Open($outEncPath, 'Create')
     $bw = New-Object System.IO.BinaryWriter($fsOut)
     try {
-        # 先頭: エントリ数 n
         $n = $rsaEntries.Count
         $bw.Write([BitConverter]::GetBytes($n), 0, 4)
 
-        # 各エントリ
         foreach ($entry in $rsaEntries) {
             $modBytes = [System.Text.Encoding]::UTF8.GetBytes($entry.Modulus)
             $bw.Write([BitConverter]::GetBytes($modBytes.Length), 0, 4)
@@ -296,23 +235,18 @@ function EncryptFileMulti {
             $bw.Write($entry.EncKey, 0, $encLen)
         }
 
-        # IV
         $bw.Write($aes.IV, 0, $aes.IV.Length)
 
-        # AES暗号 (ファイル名 + 本体)
-        $encryptor    = $aes.CreateEncryptor()
-        $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsOut, $encryptor, [System.Security.Cryptography.CryptoStreamMode]::Write)
+        $enc = $aes.CreateEncryptor()
+        $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsOut, $enc, [System.Security.Cryptography.CryptoStreamMode]::Write)
 
-        # ファイル名
         $fileNameBytes = [System.Text.Encoding]::UTF8.GetBytes($baseFileName)
-        $lenBuf        = [BitConverter]::GetBytes($fileNameBytes.Length)
-        $cryptoStream.Write($lenBuf, 0, 4)
+        $cryptoStream.Write([BitConverter]::GetBytes($fileNameBytes.Length), 0, 4)
         $cryptoStream.Write($fileNameBytes, 0, $fileNameBytes.Length)
 
-        # 本体
         $fsIn = [System.IO.File]::OpenRead($InputFilePath)
         try {
-            $bufSize = $rsabit
+            $bufSize = $global:rsabit
             $buf = New-Object byte[] $bufSize
             while ($true) {
                 $read = $fsIn.Read($buf, 0, $bufSize)
@@ -331,36 +265,33 @@ function EncryptFileMulti {
         $aes.Dispose()
     }
 
-    Write-Host "暗号化完了: $outEncPath (公開鍵数=$($rsaEntries.Count))"
+    Write-Host "暗号化完了: $outEncPath (公開鍵=$($rsaEntries.Count)件)"
 }
 
-#-----------------------------------------------------------------------
-# (F) 復号 (keys 内の全 .pvtkey を試す) + ファイル上書きチェック
-#-----------------------------------------------------------------------
+#====================== (6) DecryptFileMultiAuto =========================
 function DecryptFileMultiAuto {
     param(
-        [Parameter(Mandatory)]
-        [string]$InputFilePath
+        [string]$InputFilePath,
+        [System.Windows.Forms.Form]$OwnerForm
     )
 
     if (-not (Test-Path $InputFilePath)) {
-        Write-Host "エラー: 復号対象ファイルが見つかりません => $InputFilePath"
-        return
-    }
-
-    $pvtList = Get-ChildItem -Path $keysFolder -Filter '*.pvtkey' -File
-    if ($pvtList.Count -eq 0) {
-        Write-Host "エラー: 秘密鍵(.pvtkey)が1つもありません。"
+        [System.Windows.Forms.MessageBox]::Show(
+            $OwnerForm,
+            "復号対象ファイルが見つかりません。`n$InputFilePath",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
 
     $fsIn = [System.IO.File]::OpenRead($InputFilePath)
     $br   = New-Object System.IO.BinaryReader($fsIn)
-
     try {
         $nBuf = $br.ReadBytes(4)
         if ($nBuf.Count -lt 4) {
-            Write-Host "エラー: 公開鍵エントリ数を読めません。ファイル破損?"
+            Write-Host "エラー: 公開鍵エントリ数が読み取れません"
             return
         }
         $n = [BitConverter]::ToInt32($nBuf, 0)
@@ -371,9 +302,12 @@ function DecryptFileMultiAuto {
         Write-Host "公開鍵エントリ数: $n"
 
         $entries = @()
-        for($i=0; $i -lt $n; $i++) {
+        for($i=0; $i -lt $n; $i++){
             $modLenBuf = $br.ReadBytes(4)
-            if ($modLenBuf.Count -lt 4) { Write-Host "Modulus長読込失敗"; return }
+            if ($modLenBuf.Count -lt 4) {
+                Write-Host "Modulus長読込失敗"
+                return
+            }
             $modLen = [BitConverter]::ToInt32($modLenBuf, 0)
             if ($modLen -le 0 -or $modLen -gt 1024) {
                 Write-Host "Modulus長($modLen)が不正"
@@ -381,104 +315,109 @@ function DecryptFileMultiAuto {
             }
             $modStrBytes = $br.ReadBytes($modLen)
             if ($modStrBytes.Count -ne $modLen) {
-                Write-Host "Modulus文字列読込失敗"
+                Write-Host "Modulus文字列を最後まで読めません"
                 return
             }
             $modStr = [System.Text.Encoding]::UTF8.GetString($modStrBytes)
 
             $encLenBuf = $br.ReadBytes(4)
-            if ($encLenBuf.Count -lt 4) { Write-Host "RSA暗号鍵長読込失敗"; return }
+            if ($encLenBuf.Count -lt 4) {
+                Write-Host "RSA暗号鍵長読込失敗"
+                return
+            }
             $encLen = [BitConverter]::ToInt32($encLenBuf, 0)
-            if ($encLen -le 0 -or $encLen -gt $rsabit) {
+            if ($encLen -le 0 -or $encLen -gt $global:rsabit) {
                 Write-Host "エラー: RSA暗号鍵長($encLen)が不正"
                 return
             }
-            $encKey = $br.ReadBytes($encLen)
-            if ($encKey.Count -ne $encLen) {
+            $encKeyBytes = $br.ReadBytes($encLen)
+            if ($encKeyBytes.Count -ne $encLen) {
                 Write-Host "エラー: RSA暗号鍵読込失敗"
                 return
             }
 
             $entries += [PSCustomObject]@{
                 Modulus = $modStr
-                EncKey  = $encKey
+                EncKey  = $encKeyBytes
             }
         }
 
-        # IV
         $iv = $br.ReadBytes(16)
         if ($iv.Count -ne 16) {
-            Write-Host "エラー: IV読込失敗"
+            Write-Host "エラー: IVが読み取れません"
             return
         }
 
-        #=== 全秘密鍵を試して AES鍵を復元 ===
+        $pubFiles = Get-ChildItem -Path $global:keysFolder -Filter '*.pubkey' -File
+        if ($pubFiles.Count -eq 0) {
+            Write-Host "エラー: keysに公開鍵が1つもありません"
+            return
+        }
+
         $aesKey = $null
-        $success = $false
+        $found  = $false
 
-        foreach ($pvtItem in $pvtList) {
-            $pvtXml = Get-Content -Path $pvtItem.FullName -Raw
-            $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
-            $rsa.FromXmlString($pvtXml)
+        foreach ($ent in $entries) {
+            $modEnc = $ent.Modulus
+            $encAes = $ent.EncKey
 
-            $modPvt = Get-ModulusFromXmlString $pvtXml
-            if (-not $modPvt) {
-                Write-Host "  警告: $($pvtItem.Name) からModulus取得できず -> スキップ"
-                $rsa.Dispose()
-                continue
-            }
-            Write-Host "→ 試行: $($pvtItem.Name)"
+            foreach ($pubf in $pubFiles) {
+                $pubXml = Get-Content $pubf.FullName -Raw
+                $modPub = Get-ModulusFromXmlString $pubXml
+                if ($modPub -eq $modEnc) {
+                    $keyBaseName = [System.IO.Path]::GetFileNameWithoutExtension($pubf.Name)
+                    Write-Host "→ Modulus一致: $($pubf.Name) => KeyContainer=$keyBaseName"
 
-            $hit = $false
-            foreach ($ent in $entries) {
-                if ($ent.Modulus -eq $modPvt) {
+                    $privXml = Load-PrivateKeyXmlFromUserStore -KeyContainerName $keyBaseName
+                    if (-not $privXml) {
+                        Write-Host "  秘密鍵を取得できません => スキップ"
+                        continue
+                    }
+
+                    $rsaPriv = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+                    $rsaPriv.FromXmlString($privXml)
                     try {
-                        # ★RSA-OAEPに変更 (true)
-                        $tmpKey = $rsa.Decrypt($ent.EncKey, $true)
-                        if ($tmpKey) {
-                            Write-Host "   成功: $($pvtItem.Name)"
-                            $aesKey = $tmpKey
-                            $hit    = $true
+                        $tmpAes = $rsaPriv.Decrypt($encAes, $false)
+                        if ($tmpAes) {
+                            Write-Host "  → 秘密鍵で復号成功!"
+                            $aesKey = $tmpAes
+                            $rsaPriv.Dispose()
+                            $found = $true
                             break
                         }
                     }
                     catch {
-                        Write-Host "   RSA復号失敗 => 不一致"
+                        Write-Host "  復号失敗 => $_"
                     }
+                    $rsaPriv.Dispose()
                 }
+                if ($found) { break }
             }
-            $rsa.Dispose()
-            if ($hit) {
-                $success = $true
-                break
-            }
+            if ($found) { break }
         }
 
-        if (-not $success) {
-            Write-Host "エラー: keys内のいずれの秘密鍵でも復号できませんでした"
+        if (-not $found -or -not $aesKey) {
+            Write-Host "エラー: 一致する公開鍵 + 秘密鍵が見つかりませんでした"
             return
         }
 
-        # 復号に成功したAESキーをSecureStringに保持
-        $Global:secureAesKey = ConvertTo-SecureString ([Convert]::ToBase64String($aesKey)) -AsPlainText -Force
-
-        #=== AES復号ストリーム ===
+        # AES復号
         $aes = [System.Security.Cryptography.Aes]::Create()
         $aes.KeySize = 256
         $aes.BlockSize = 128
-        $aes.Mode    = [System.Security.Cryptography.CipherMode]::CBC
+        $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
         $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
         $aes.Key = $aesKey
         $aes.IV  = $iv
 
-        $decryptor = $aes.CreateDecryptor()
-        $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsIn, $decryptor, [System.Security.Cryptography.CryptoStreamMode]::Read)
+        $dec = $aes.CreateDecryptor()
+        $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsIn, $dec, [System.Security.Cryptography.CryptoStreamMode]::Read)
 
-        # ファイル名取得
+        # ファイル名
         $fnameLenBuf = New-Object byte[] 4
         $count = $cryptoStream.Read($fnameLenBuf, 0, 4)
         if ($count -lt 4) {
-            Write-Host "エラー: ファイル名長(4byte)が読めません"
+            Write-Host "エラー: ファイル名長が読めません"
             return
         }
         $fnameLen = [BitConverter]::ToInt32($fnameLenBuf, 0)
@@ -486,7 +425,6 @@ function DecryptFileMultiAuto {
             Write-Host "エラー: ファイル名長($fnameLen)が不正"
             return
         }
-
         $fnameBuf = New-Object byte[] $fnameLen
         $count = $cryptoStream.Read($fnameBuf, 0, $fnameLen)
         if ($count -lt $fnameLen) {
@@ -494,39 +432,32 @@ function DecryptFileMultiAuto {
             return
         }
         $originalFileName = [System.Text.Encoding]::UTF8.GetString($fnameBuf)
-
         Write-Host "復号: 元ファイル名=$originalFileName"
 
-        # 出力ファイルパス
-        $folder = [System.IO.Path]::GetDirectoryName($InputFilePath)
-        $outFilePath = Join-Path $folder $originalFileName
-
-        # 上書き確認
-        $ok = Confirm-Overwrite $outFilePath
-        if (-not $ok) {
+        $outPath = Join-Path ([System.IO.Path]::GetDirectoryName($InputFilePath)) $originalFileName
+        if (-not (Confirm-Overwrite $outPath -OwnerForm $OwnerForm)) {
             return
         }
 
-        # 書き込み
-        $fsOut = [System.IO.File]::Open($outFilePath, 'Create')
+        $fsOut = [System.IO.File]::Open($outPath, 'Create')
         try {
-            $bufSize = $rsabit
+            $bufSize = $global:rsabit
             $buf = New-Object byte[] $bufSize
             while ($true) {
-                $rd = $cryptoStream.Read($buf, 0, $bufSize)
-                if ($rd -le 0) { break }
-                $fsOut.Write($buf, 0, $rd)
+                $r2 = $cryptoStream.Read($buf, 0, $bufSize)
+                if ($r2 -le 0) { break }
+                $fsOut.Write($buf, 0, $r2)
             }
         }
         finally {
             $fsOut.Close()
         }
 
-        Write-Host "復号完了: $outFilePath"
+        Write-Host "復号完了: $outPath"
 
         $cryptoStream.Close()
         $cryptoStream.Dispose()
-        $decryptor.Dispose()
+        $dec.Dispose()
         $aes.Dispose()
     }
     finally {
@@ -535,25 +466,21 @@ function DecryptFileMultiAuto {
     }
 }
 
-#-----------------------------------------------------------------------
-# (G) 公開鍵リスト (CheckedListBoxで複数選択)
-#-----------------------------------------------------------------------
+#====================== (7) Load-PubKeyList ==============================
 function Load-PubKeyList {
-    $pubkeyFiles = Get-ChildItem -Path $keysFolder -Filter '*.pubkey' -File -ErrorAction SilentlyContinue
-    $list = @()
-    foreach ($f in $pubkeyFiles) {
-        $list += $f.BaseName
+    $pubFiles = Get-ChildItem -Path $global:keysFolder -Filter '*.pubkey' -File -ErrorAction SilentlyContinue
+    $names = @()
+    foreach ($pf in $pubFiles) {
+        $names += [System.IO.Path]::GetFileNameWithoutExtension($pf.Name)
     }
-    return $list | Sort-Object -Unique
+    return $names | Sort-Object -Unique
 }
 
-#-----------------------------------------------------------------------
-# (H) GUI 構築
-#-----------------------------------------------------------------------
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "EasyCrypt.ps1"
-$form.Size = New-Object System.Drawing.Size(620,520)
-$form.StartPosition = "CenterScreen"
+#====================== (8) GUI構築 ======================================
+$mainForm = New-Object System.Windows.Forms.Form
+$mainForm.Text = "EasyCrypt.ps1 (Dialog in front)"
+$mainForm.Size = New-Object System.Drawing.Size(620,520)
+$mainForm.StartPosition = "CenterScreen"
 
 $dropLabel = New-Object System.Windows.Forms.Label
 $dropLabel.Text = "ここにファイルをドロップ"
@@ -562,135 +489,147 @@ $dropLabel.Location = New-Object System.Drawing.Point(10,10)
 $dropLabel.BorderStyle = "Fixed3D"
 $dropLabel.TextAlign = "MiddleCenter"
 $dropLabel.AllowDrop = $true
-$form.Controls.Add($dropLabel)
+$mainForm.Controls.Add($dropLabel)
 
 $fileListBox = New-Object System.Windows.Forms.ListBox
 $fileListBox.Size = New-Object System.Drawing.Size(580,100)
 $fileListBox.Location = New-Object System.Drawing.Point(10,170)
-$form.Controls.Add($fileListBox)
+$mainForm.Controls.Add($fileListBox)
 
 # ドラッグイベント
 $dropLabel.Add_DragEnter({
     param($sender, $e)
     if ($e.Data.GetDataPresent([System.Windows.Forms.DataFormats]::FileDrop)) {
         $e.Effect = [System.Windows.Forms.DragDropEffects]::Copy
-    }
-    else {
+    } else {
         $e.Effect = [System.Windows.Forms.DragDropEffects]::None
     }
 })
 $dropLabel.Add_DragDrop({
     param($sender, $e)
     $files = $e.Data.GetData([System.Windows.Forms.DataFormats]::FileDrop)
-    foreach ($f in $files) {
-        if (-not $fileListBox.Items.Contains($f)) {
-            $null = $fileListBox.Items.Add($f)
+    foreach ($file in $files) {
+        if (-not $fileListBox.Items.Contains($file)) {
+            $null = $fileListBox.Items.Add($file)
         }
     }
     $dropLabel.Text = "ファイル数: $($fileListBox.Items.Count)"
 })
 
-# 公開鍵チェックリスト
-$ckLabel = New-Object System.Windows.Forms.Label
-$ckLabel.Text = "使用する公開鍵をチェック"
-$ckLabel.Location = New-Object System.Drawing.Point(10,280)
-$ckLabel.Size = New-Object System.Drawing.Size(180,20)
-$form.Controls.Add($ckLabel)
+$pubKeyLabel = New-Object System.Windows.Forms.Label
+$pubKeyLabel.Text = "使用する公開鍵 (複数可):"
+$pubKeyLabel.Location = New-Object System.Drawing.Point(10,280)
+$pubKeyLabel.Size = New-Object System.Drawing.Size(180,20)
+$mainForm.Controls.Add($pubKeyLabel)
 
 $pubKeyCheckedList = New-Object System.Windows.Forms.CheckedListBox
 $pubKeyCheckedList.Size = New-Object System.Drawing.Size(200,120)
 $pubKeyCheckedList.Location = New-Object System.Drawing.Point(10,300)
-$form.Controls.Add($pubKeyCheckedList)
+$mainForm.Controls.Add($pubKeyCheckedList)
 
 function RefreshKeyList {
     $pubKeyCheckedList.Items.Clear()
     $lst = Load-PubKeyList
     foreach ($k in $lst) {
-        $null = $pubKeyCheckedList.Items.Add($k)
+        [void]$pubKeyCheckedList.Items.Add($k)
     }
 }
 RefreshKeyList
 
-# 鍵生成ボタン
-$genBtn = New-Object System.Windows.Forms.Button
-$genBtn.Text = "鍵生成"
-$genBtn.Location = New-Object System.Drawing.Point(230,300)
-$genBtn.Size = New-Object System.Drawing.Size(80,30)
-$genBtn.Add_Click({
-    $newId = Generate-KeyPair
-    if ($newId) {
-        [System.Windows.Forms.MessageBox]::Show("新しい鍵を生成しました: $newId")
-        RefreshKeyList
-    }
-    else {
-        [System.Windows.Forms.MessageBox]::Show("鍵ペアの生成または検証に失敗しました。","エラー")
-    }
-})
-$form.Controls.Add($genBtn)
-
-# 再読込ボタン
+# 再読込
 $reloadBtn = New-Object System.Windows.Forms.Button
 $reloadBtn.Text = "再読込"
-$reloadBtn.Location = New-Object System.Drawing.Point(230,340)
+$reloadBtn.Location = New-Object System.Drawing.Point(230,300)
 $reloadBtn.Size = New-Object System.Drawing.Size(80,30)
 $reloadBtn.Add_Click({
     RefreshKeyList
 })
-$form.Controls.Add($reloadBtn)
+$mainForm.Controls.Add($reloadBtn)
 
-# Encrypt ボタン (複数公開鍵選択)
+# 暗号化ボタン
 $encBtn = New-Object System.Windows.Forms.Button
 $encBtn.Text = "暗号化"
 $encBtn.Location = New-Object System.Drawing.Point(10,430)
 $encBtn.Size = New-Object System.Drawing.Size(100,30)
 $encBtn.Add_Click({
     if ($fileListBox.Items.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("暗号化するファイルがありません。")
+        [System.Windows.Forms.MessageBox]::Show(
+            $mainForm,
+            "暗号化するファイルがありません。",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
 
-    # チェックされた公開鍵を収集
     $selectedPubs = @()
     for($i=0; $i -lt $pubKeyCheckedList.Items.Count; $i++){
         if ($pubKeyCheckedList.GetItemChecked($i)) {
-            $keyName = $pubKeyCheckedList.Items[$i]
-            $pubPath = Join-Path $keysFolder ($keyName + ".pubkey")
+            $nameBase = $pubKeyCheckedList.Items[$i]
+            $pubPath = Join-Path $global:keysFolder ($nameBase + ".pubkey")
             $selectedPubs += $pubPath
         }
     }
     if ($selectedPubs.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("公開鍵を1つ以上チェックしてください。")
+        [System.Windows.Forms.MessageBox]::Show(
+            $mainForm,
+            "公開鍵を1つ以上チェックしてください。",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
 
     foreach ($f in $fileListBox.Items) {
-        EncryptFileMulti -PublicKeyPaths $selectedPubs -InputFilePath $f
+        EncryptFileMulti -PublicKeyPaths $selectedPubs -InputFilePath $f -OwnerForm $mainForm
     }
-    [System.Windows.Forms.MessageBox]::Show("暗号化が完了しました。")
+
+    [System.Windows.Forms.MessageBox]::Show(
+        $mainForm,
+        "暗号化が完了しました。",
+        "情報",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
     $fileListBox.Items.Clear()
     $dropLabel.Text = "ここにファイルをドロップ"
 })
-$form.Controls.Add($encBtn)
+$mainForm.Controls.Add($encBtn)
 
-# Decrypt ボタン (keys内の全pvtkeyを自動試行)
+# 復号ボタン
 $decBtn = New-Object System.Windows.Forms.Button
 $decBtn.Text = "復号"
 $decBtn.Location = New-Object System.Drawing.Point(120,430)
 $decBtn.Size = New-Object System.Drawing.Size(100,30)
 $decBtn.Add_Click({
     if ($fileListBox.Items.Count -eq 0) {
-        [System.Windows.Forms.MessageBox]::Show("復号するファイルがありません。")
+        [System.Windows.Forms.MessageBox]::Show(
+            $mainForm,
+            "復号するファイルがありません。",
+            "エラー",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        )
         return
     }
 
     foreach ($f in $fileListBox.Items) {
-        DecryptFileMultiAuto -InputFilePath $f
+        DecryptFileMultiAuto -InputFilePath $f -OwnerForm $mainForm
     }
-    [System.Windows.Forms.MessageBox]::Show("復号試行が完了しました。(成功/失敗はコンソール参照)")
+
+    [System.Windows.Forms.MessageBox]::Show(
+        $mainForm,
+        "復号処理が完了しました。",
+        "情報",
+        [System.Windows.Forms.MessageBoxButtons]::OK,
+        [System.Windows.Forms.MessageBoxIcon]::Information
+    )
     $fileListBox.Items.Clear()
     $dropLabel.Text = "ここにファイルをドロップ"
 })
-$form.Controls.Add($decBtn)
+$mainForm.Controls.Add($decBtn)
 
 # リストクリア
 $clearBtn = New-Object System.Windows.Forms.Button
@@ -701,8 +640,9 @@ $clearBtn.Add_Click({
     $fileListBox.Items.Clear()
     $dropLabel.Text = "ここにファイルをドロップ"
 })
-$form.Controls.Add($clearBtn)
+$mainForm.Controls.Add($clearBtn)
 
-$form.Topmost = $true
-$form.Add_Shown({ $form.Activate() })
-[void]$form.ShowDialog()
+# メインフォーム表示
+$mainForm.Topmost = $true
+$null = $mainForm.Add_Shown({ $mainForm.Activate() })
+[void]$mainForm.ShowDialog()
