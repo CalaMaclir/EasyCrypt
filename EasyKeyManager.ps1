@@ -267,39 +267,54 @@ function Export-PrivateKey {
     Write-Host "秘密鍵Export完了 => $destPath"
 }
 
-function Import-PrivateKey {
+function Import-Keys {
     param(
         [Parameter(Mandatory=$true)]
-        [string]$PvtKeyFilePath
+        [string]$KeyFilePath
     )
 
-    if (-not (Test-Path $PvtKeyFilePath)) {
-        Write-Host "ファイルがありません => $PvtKeyFilePath"
+    if (-not (Test-Path $KeyFilePath)) {
+        Write-Host "ファイルがありません => $KeyFilePath"
+        return
+    }
+    
+    # ファイル拡張子をチェック (.pubkeyの場合は公開鍵ファイルとしてコピー)
+    $ext = [System.IO.Path]::GetExtension($KeyFilePath).ToLower()
+    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($KeyFilePath)
+    
+    if ($ext -eq ".pubkey") {
+        $destPath = Join-Path $keysFolder ([System.IO.Path]::GetFileName($KeyFilePath))
+        if (Test-Path $destPath) {
+            Write-Host "既に同名の公開鍵が存在 => $destPath (上書き回避)"
+        }
+        else {
+            Copy-Item -Path $KeyFilePath -Destination $destPath
+            Write-Host "公開鍵ファイルをコピーしました => $destPath"
+        }
         return
     }
 
-    # 1) ファイルから秘密鍵XML を取得
-    $pvtXml = Get-Content -Path $PvtKeyFilePath -Raw
-    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($PvtKeyFilePath)
+    # --- 以降は従来の秘密鍵(.pvtkey)インポート処理 ---
+    $pvtXml = Get-Content -Path $KeyFilePath -Raw
 
-    # 1.5) 既に同名のKeyContainerがあるか確認
+    # 既に同名のKeyContainerがあるか確認
     $containers = [KeyContainers]::GetUserKeyContainers($provType, $provider)
     if ($containers -contains $baseName) {
         [System.Windows.Forms.MessageBox]::Show("KeyContainer '$baseName' が既に存在します。Import中止","エラー")
         return
     }
 
-    # 2) ユーザーストアに保存
+    # ユーザーストアに保存
     Save-PrivateKeyToUserStore -KeyContainerName $baseName -PrivateKeyXml $pvtXml
     Write-Host "秘密鍵Import完了 => KeyContainer: $baseName"
 
-    # 3) 公開鍵を生成＆署名検証
+    # 公開鍵を生成＆署名検証
     $publicXml = Test-RSAKeyPair -PrivateKeyXml $pvtXml
     if (-not $publicXml) {
         [System.Windows.Forms.MessageBox]::Show("秘密鍵が不正のため公開鍵を作成できません","エラー")
         return
     }
-    # 4) 公開鍵を keys に保存 (同名 .pubkey)
+    # 公開鍵を keys フォルダに保存 (同名 .pubkey)
     $pubPath = Join-Path $keysFolder ($baseName + ".pubkey")
     if (Test-Path $pubPath) {
         Write-Host "既に同名の公開鍵が存在 => $pubPath (上書き回避)"
@@ -308,6 +323,7 @@ function Import-PrivateKey {
     $publicXml | Out-File -FilePath $pubPath -Encoding UTF8
     Write-Host "→ 公開鍵作成 => $pubPath (署名検証OK)"
 }
+
 
 #=======================================================================
 #                           GUI部
@@ -443,24 +459,26 @@ $btnExp.Add_Click({
 })
 $form.Controls.Add($btnExp)
 
-#--- 秘密鍵Importボタン (.pvtkey -> UserStore, 公開鍵生成) ---
+#--- 秘密鍵Importボタン (.pvtkey / .pubkey -> UserStore または keys フォルダにコピー) ---
 $btnImp = New-Object System.Windows.Forms.Button
-$btnImp.Text = "秘密鍵Import"
+$btnImp.Text = "鍵Import"
 $btnImp.Location = New-Object System.Drawing.Point(330,120)
 $btnImp.Size = New-Object System.Drawing.Size(120,30)
 $btnImp.Add_Click({
     $ofd = New-Object System.Windows.Forms.OpenFileDialog
     $ofd.InitialDirectory = $keysFolder
-    $ofd.Filter = "PrivateKey files (*.pvtkey)|*.pvtkey|All files (*.*)|*.*"
+    # フィルタを "Key files (*.pvtkey;*.pubkey)" と "All files" に変更
+    $ofd.Filter = "Key files (*.pvtkey;*.pubkey)|*.pvtkey;*.pubkey|All files (*.*)|*.*"
     $ofd.Multiselect = $false
     $result = $ofd.ShowDialog($form)
     if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
-        Import-PrivateKey -PvtKeyFilePath $ofd.FileName
-        [System.Windows.Forms.MessageBox]::Show("秘密鍵Import完了 (コンソール参照)","情報")
+        Import-Keys -KeyFilePath $ofd.FileName
+        [System.Windows.Forms.MessageBox]::Show("鍵Import完了 (コンソール参照)","情報")
         Refresh-PubList
     }
 })
 $form.Controls.Add($btnImp)
+
 
 #--- 再読込ボタン ---
 $btnReload = New-Object System.Windows.Forms.Button
