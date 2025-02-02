@@ -1,6 +1,8 @@
-﻿############################################################################
-# EasyCrypt by Cala Maclir
-############################################################################
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║                                                                        ║
+# ║                     EasyCrypt by Cala Maclir                           ║
+# ║                                                                        ║
+# ╚════════════════════════════════════════════════════════════════════════╝
 
 #-------------------------
 # 必要なアセンブリのロード
@@ -254,16 +256,17 @@ function EncryptFileMulti {
             $bw.Write($entry.EncKey, 0, $encLen)
         }
 
-        # IVの書き込み
+        # IVの書き込み（平文）
         $bw.Write($aes.IV, 0, $aes.IV.Length)
 
         # AES暗号ストリームの作成
         $enc = $aes.CreateEncryptor()
         $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsOut, $enc, [System.Security.Cryptography.CryptoStreamMode]::Write)
 
-        # ファイル名の暗号化
+        # ファイル名の暗号化（ファイル名長も暗号化）
         $fileNameBytes = [System.Text.Encoding]::UTF8.GetBytes($baseFileName)
-        Write-Int32 -Writer $bw -Value $fileNameBytes.Length
+        $fnameLenBytes = [BitConverter]::GetBytes($fileNameBytes.Length)
+        $cryptoStream.Write($fnameLenBytes, 0, $fnameLenBytes.Length)
         $cryptoStream.Write($fileNameBytes, 0, $fileNameBytes.Length)
 
         # 入力ファイルの暗号化
@@ -415,6 +418,7 @@ function DecryptFileMultiAuto {
         $dec = $aes.CreateDecryptor()
         $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsIn, $dec, [System.Security.Cryptography.CryptoStreamMode]::Read)
 
+        # ファイル名長とファイル名の復号
         $fnameLenBuf = New-Object byte[] 4
         $count = $cryptoStream.Read($fnameLenBuf, 0, 4)
         if ($count -lt 4) {
