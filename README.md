@@ -18,6 +18,7 @@
 - **鍵ペアの生成 (Generate Key)** : ユーザーストアに秘密鍵を保存し、公開鍵を `keys` フォルダに作成
 - **秘密鍵のエクスポート (Export Key)** : ユーザーストアから秘密鍵を `keys/secret` に保存
 - **秘密鍵のインポート (Import Key)** : `.pvtkey` 形式の秘密鍵をインポートし、対応する公開鍵を自動作成
+- **公開鍵のインポート (Import Key)** : `.pubkey` 形式の公開鍵をインポート
 
 ## 特徴
 
@@ -79,6 +80,9 @@
 
 ## 注意点
 
+- **実装の変更について**  
+  - まだまだ評価中の段階であり、実装の変更（特にファイルのフォーマット）を受ける可能性が十分あります。 
+    
 - **秘密鍵 (.pvtkey) の保管**  
   - エクスポートした秘密鍵を第三者に漏洩すると暗号ファイルを解読される恐れがあります。  
   - 取り扱いには十分ご注意ください。
@@ -91,7 +95,7 @@
 
 - **実装等について**  
   - 次のリポジトリも参照してください  
-    [GitHub - EncryptDecryptWithPublickey](https://github.com/CalaMaclir/EncryptDecryptWithPublickey)
+    [Note - Powershellで公開鍵暗号を使用した暗号化/復号のコードを実装しました](https://note.com/maclir_cala/n/n46b10c71c2e7)
 
 ## ライセンス
 
