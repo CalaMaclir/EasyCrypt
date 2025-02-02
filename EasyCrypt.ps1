@@ -1,5 +1,5 @@
 ﻿############################################################################
-# EasyCrypt
+# EasyCrypt by Cala Maclir
 ############################################################################
 
 #-------------------------
@@ -224,7 +224,8 @@ function EncryptFileMulti {
             $rsaPub.Dispose()
             continue
         }
-        $encKey = $rsaPub.Encrypt($aes.Key, $false)
+        # RSA.Encrypt: OAEPモードに統一（$true）
+        $encKey = $rsaPub.Encrypt($aes.Key, $true)
         $rsaPub.Dispose()
         $rsaEntries += [PSCustomObject]@{
             Modulus = $modulus
@@ -260,11 +261,9 @@ function EncryptFileMulti {
         $enc = $aes.CreateEncryptor()
         $cryptoStream = New-Object System.Security.Cryptography.CryptoStream($fsOut, $enc, [System.Security.Cryptography.CryptoStreamMode]::Write)
 
-        # ファイル名（暗号化部分）:
-        # まず、ファイル名の長さを暗号化ストリームに書き込む
+        # ファイル名の暗号化
         $fileNameBytes = [System.Text.Encoding]::UTF8.GetBytes($baseFileName)
-        $lenBuf = [BitConverter]::GetBytes($fileNameBytes.Length)
-        $cryptoStream.Write($lenBuf, 0, 4)
+        Write-Int32 -Writer $bw -Value $fileNameBytes.Length
         $cryptoStream.Write($fileNameBytes, 0, $fileNameBytes.Length)
 
         # 入力ファイルの暗号化
@@ -378,7 +377,8 @@ function DecryptFileMultiAuto {
                     $rsaPriv = New-Object System.Security.Cryptography.RSACryptoServiceProvider
                     $rsaPriv.FromXmlString($privXml)
                     try {
-                        $tmpAes = $rsaPriv.Decrypt($encAes, $false)
+                        # RSA.Decrypt: OAEPモードに統一（$true）
+                        $tmpAes = $rsaPriv.Decrypt($encAes, $true)
                         if ($tmpAes) {
                             Write-Host "  → 秘密鍵で復号成功!"
                             $aesKey = $tmpAes
@@ -403,7 +403,7 @@ function DecryptFileMultiAuto {
             return
         }
 
-        # AES復号
+        # AES復号処理
         $aes = [System.Security.Cryptography.Aes]::Create()
         $aes.KeySize = 256
         $aes.BlockSize = 128
