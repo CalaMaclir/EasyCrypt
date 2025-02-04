@@ -1,4 +1,4 @@
-# ╔════════════════════════════════════════════════════════════════════════╗
+﻿# ╔════════════════════════════════════════════════════════════════════════╗
 # ║                                                                        ║
 # ║                     EasyCrypt by Cala Maclir                           ║
 # ║                                                                        ║
@@ -500,7 +500,7 @@ function New-Button {
 }
 
 $mainForm = New-Object System.Windows.Forms.Form
-$mainForm.Text = "EasyCrypt.ps1 (Dialog in front)"
+$mainForm.Text = "EasyCrypt"
 $mainForm.Size = New-Object System.Drawing.Size(620,520)
 $mainForm.StartPosition = "CenterScreen"
 $mainForm.Topmost = $true
